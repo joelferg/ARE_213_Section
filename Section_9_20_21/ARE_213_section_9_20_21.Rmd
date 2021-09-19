@@ -1,0 +1,171 @@
+---
+title: "ARE 213 Section 9/20/2021"
+author: "Joel Ferguson"
+date: "9/18/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(RColorBrewer)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Covariate Overlap and CEF Functional Form in the Regression Adjustment Design
+
+We've already seen how we need two particular restrictions on the relationship between potential outcomes and the treatment assignment process for causal identification: (conditional) independence of potential oucomes from treatment status and SUTVA (or a similar restriction). We'll now introduce an additional assumption: *covariate overlap*, which will allow us to use a particularly simple approach to causal estimation: running a regression.
+
+First, let's review conditional independence of potential oucomes from treatment status, otherwise known as *unconfoundedness*. This assumption states
+
+\[(Y_i(0),Y_i(1))\perp D_i|X_i\].
+
+People will often state this assumption as "treatment is as-good-as-randomly assigned, conditional on $X_i$. However, another way to think of it that I find useful (and I think will be particularly useful when we get to propensity score methods in a week or two) is that if you know $X_i$, you cannot learn anything from $Y_i$ about $D_i$. This is a powerful result because it says we can compare $E[Y_i|D_i=0,X_i=x]$ and $E[Y_i|D_i=1,X_i=x]$ and learn the average treatment effect at $x$, since there cannot be any selection!
+
+In practice, it may be difficult to find a meaningful number of observations with either treatment status at every observed value of $X_i$, and in fact the assumptions we've made so far don't rule out that it's **completely impossible**. In particular, this is the case if 
+
+\[\{X_i:D_i=1\}\cap\{X_i:D_i=0\}=\emptyset\]
+
+To make headway, we can bump up the unconfoundedness assumption to *strong unconfoundedness* by additionally assuming *covariate overlap*:
+
+\[0\leq P(D_i=1|X_i) \leq 1\]
+
+Covariate overlap enforces that we have treated and untreated observations at every point in the covariate distribution, at least in a sufficiently large sample. Equipped with strong unconfoundedness we know that we should always be able to calculate $E[Y_i(1)-Y_i(0)|X_i]$ by finding $E[Y_i|X_i,D_i]$. One tool for such a task is OLS regression. As shown in the class notes, OLS is the lowest MSE linear approximator of the CEF, and as such, we might expect it to do a good job in this case. As also shown in the class notes, how well it does depends on how close to linear $E[D_i|X_i]$ is. This is what we'll explore via simulation
+
+```{r Regression Adjustment}
+set.seed(92021)
+N <- 10000
+X_i <- rnorm(N) # One continuous covariate drawn from ~N(0,1)
+# Find min and max of X
+minX <- min(X_i)
+maxX <- max(X_i)
+
+# Draw untreated POs from ~N(0,10), treated POs from ~N(Y(0)+10,1)
+Y_i0 <- rnorm(N,0,10)
+Y_i1 <- sapply(Y_i0,function(x) rnorm(1,10+x))
+
+print(paste("ATE:",mean(Y_i1-Y_i0)))
+
+# F'n to plot the prob of treatment by X
+plotD <- function(Dfn){ # Dfn is a function which assigns treatment prob to X
+  D <- sapply(X_i,Dfn) # Find treatment Probs
+  df <-  data.frame("X"=X_i,
+                     "Y0"=Y_i0,
+                     "Y1"=Y_i1,
+                     "D"=as.numeric(D),
+                     "Y"=Y_i1*D+(1-D)*Y_i0) # Make a DF
+  out <- ggplot(data=df)+
+    geom_point(aes(x=X,y=D))
+  return(out)
+}
+
+
+# F'n to compute ATE given a treatment vector
+getATE <- function(D){
+  df <- data.frame("X"=X_i,
+                     "Y0"=Y_i0,
+                     "Y1"=Y_i1,
+                     "D"=D,
+                     "Y"=Y_i1*D+(1-D)*Y_i0)
+  ATE_lin <- lm(Y~D+X,df) # Reg Y on X and D
+  return(summary(ATE_lin))
+}
+
+# First, lets try a nice linear form for E[D|X]
+Dfn_lin <- function(x){
+  return((x-minX)/((1+(maxX-minX)/10)*maxX-(1+(maxX-minX)/10)*minX))
+}
+D_lin <- sapply(X_i, function(x) rbernoulli(1,Dfn_lin(x)))
+plotD(Dfn_lin)
+getATE(D_lin)
+
+# Now let's try something a bit less linear, like log
+Dfn_log <- function(x){
+  return(log(x-(minX*1.1))/log(maxX-(minX*1.1)))
+}
+D_log <- sapply(X_i, function(x) rbernoulli(1,Dfn_log(x)))
+plotD(Dfn_log)
+getATE(D_log)
+
+# Even more non-linear, like an exponential
+Dfn_exp <- function(x){
+  return(exp(x)/exp(maxX))
+}
+D_exp <- sapply(X_i, function(x) rbernoulli(1,Dfn_exp(x)))
+plotD(Dfn_exp)
+getATE(D_exp)
+
+# Now super non-linear: abs(sine)
+Dfn_sin <- function(x){
+  return(abs(.98*sin(x*2)))
+}
+D_sin <- sapply(X_i, function(x) rbernoulli(1,Dfn_sin(x)))
+plotD(Dfn_sin)
+getATE(D_sin)
+```
+
+You can see that the more non-linear forms of $E[D_i|X_i]$ show larger deviations of estimates from the true ATE of 10 but in general, all of the estimates are pretty close. This was in part due to the linearity of $E[Y_i(0)|X_i]$ and $E[Y_i(1)|X_i]$. Even if we have few obervations with a particular treatment status in parts of the covariate distribution, we can use information from other parts along with the imposed linearity to form nice counterfactuals. This starts to break down if we have non-linear CEFs for the potential outcomes
+
+```{r Regression Adjustment Breakdown}
+set.seed(92021)
+N <- 10000
+X_i <- rnorm(N) # One continuous covariate drawn from ~N(0,1)
+# Find min and max of X
+minX <- min(X_i)
+maxX <- max(X_i)
+
+# Draw untreated PO errors from ~N(0,1)
+e_i0 <- rnorm(N)
+e_i1 <- rnorm(N)
+
+# E[Y(1)|X] is exponential in X, E[Y(0)|X] is negative of that
+Y_i0 <- -1*exp(X_i)+e_i0
+Y_i1 <- exp(X_i)+e_i1
+
+print(paste("ATE:",mean(Y_i1-Y_i0)))
+
+# First, lets try a nice linear form for E[D|X]
+D_lin <- sapply(X_i, function(x) rbernoulli(1,Dfn_lin(x)))
+getATE(D_lin)
+
+# Now let's try something a bit less linear, like log
+D_log <- sapply(X_i, function(x) rbernoulli(1,Dfn_log(x)))
+getATE(D_log)
+
+# Even more non-linear, like an exponential
+D_exp <- sapply(X_i, function(x) rbernoulli(1,Dfn_exp(x)))
+getATE(D_exp)
+
+# Now super non-linear: abs(sine)
+D_sin <- sapply(X_i, function(x) rbernoulli(1,Dfn_sin(x)))
+getATE(D_sin)
+```
+Here we see some real movement in the estimated ATEs. But interestingly, our highly non-linear sine CEF works quite well, even better than the linear CEF. What's going on here? The answer lies in distributions of $X_i$ by treatment status.
+
+```{r Treatment covariate dists}
+# Function to plot covariate distributions by treatment status
+plot_covar_dists <- function(D){
+  df <-  data.frame("X"=X_i,
+                     "Y0"=Y_i0,
+                     "Y1"=Y_i1,
+                     "D"=D,
+                     "Y"=Y_i1*D+(1-D)*Y_i0)
+  pal <- brewer.pal(3,"Set2")
+  out <- ggplot(data=df)+
+    geom_density(aes(x=X,group=D,fill=D),alpha=0.5)+
+    scale_fill_brewer(palette = "Set2")+
+    geom_vline(aes(xintercept=mean(X_i[D==1]),color=pal[1]),
+               show.legend = F)+
+    geom_vline(aes(xintercept=mean(X_i[D==0]),color=pal[2]),
+               show.legend = F)
+  return(out)
+}
+
+plot_covar_dists(D_lin)
+plot_covar_dists(D_log)
+plot_covar_dists(D_exp)
+plot_covar_dists(D_sin)
+```
+
+Even though the sine CEF is highly non-linear, its distributions of $X_i|D_i$ have very close means. This is why linear regression performs well in this case. Unlike the other CEFs, for which the probability of receiving treatment is particularly higher or lower on the end of the $X_i$ distribution with high treatment effects, the parts of the $X_i$ distribution for which the probability of receiving treatment is high under the sine CEF are not particularly on either side. Note that where in the distribution of $X_i$ treatment effects are high matters, just because the means are close does not guarantee the estimate of the ATE will be good. If treatment effects were high at the peaks of the sine, we'd over estimate the ATE despite the close means.
