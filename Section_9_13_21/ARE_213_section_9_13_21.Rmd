@@ -74,8 +74,8 @@ This example shows both of the issues mentioned above in action (it also shows h
 More formally, the problem is that treatment status $D_i$, is a function of the untreated potential outcome $Y_i(0)$. As such, we can write the observational estimated treatment effect as
 
 \[\tau^{obs} = E[Y_i|D_i=1]-E[Y_i|D_i=0]\\
-=E[Y_1|D_i=1]-E[Y_0|D_i=0]\\
-=E[Y_1|Y_0 \geq T]-E[Y_0|Y_0 < T]\]
+=E[Y_i(1)|D_i=1]-E[Y_i(0)|D_i=0]\\
+=E[Y_i(1)|Y_0 \geq T]-E[Y_i(0)|Y_0 < T]\]
 
 This is very clearly different from the object of interest $\tau=E[Y_i(1)-Y_i(0)]$. In general, we can only hope to recover a causal effect if treatment assignment is *independent* of potential outcomes (conditional on some covariates). In this case, conditioning on treatment status provides no additional information to the expected value of potential outcomes (again, conditional on some covariates). 
 
