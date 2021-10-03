@@ -73,7 +73,7 @@ getATE <- function(D){
 
 # First, lets try a nice linear form for E[D|X]
 Dfn_lin <- function(x){
-  return((x-minX)/((1+(maxX-minX)/10)*maxX-(1+(maxX-minX)/10)*minX))
+  return((x-(minX-.4))/(1.1*(maxX-minX)))
 }
 D_lin <- sapply(X_i, function(x) rbernoulli(1,Dfn_lin(x)))
 plotD(Dfn_lin)
