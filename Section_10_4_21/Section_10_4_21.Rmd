@@ -105,7 +105,7 @@ print(paste("OLS estimate of ATE with non-parametric estimate of p-score:",np_re
 # Finally, include the true p-score as a control
 pscore_reg <- lm(Y~D+ED,
                  data=df)
-print(paste("OLS P-score adjustment estimate of ATE:",np_reg$coefficients[2]))
+print(paste("OLS P-score adjustment estimate of ATE:",pscore_reg$coefficients[2]))
 ```
 
 In this case, controlling for our non-parametric estimate of $\mathbb{E}[D|X]$ gives a slightly better estimate than OLS, but not by much. Even though we know $\hat{\beta}$ is estimated consistently, we run into the issue of covariate overlap in practice. For very low values of $X$, we don't observe the proper proportion of treated observations (the proportion determined by $\mathbb{E}[D|X]$), biasing our estimate.
