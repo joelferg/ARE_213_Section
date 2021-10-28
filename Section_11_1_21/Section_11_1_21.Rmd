@@ -1,0 +1,139 @@
+---
+title: "Recent Advances in Diff-in-Diff"
+author: "Joel Ferguson"
+date: "11/01/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(fixest)
+set.seed(11121)
+```
+
+# Treatment effect heterogeneity in Diff-in-Diff
+
+Over the past few years there has been a massive improvement in our understanding of Diff-in-Diff and the tools available for estimating treatment effects using a Diff-in-Diff research design. Like the expansion of our understanding of IV, regarding its interpretation as estimating a Local Average Treatment Effect (we'll cover this in a few weeks), these advances came from thinking about treatment effect heterogeneity and how are we summarizing it with a single estimate. To see why treatment effect heterogeneity matters, it's worth revisiting the most basic form of diff-in-diff estimation.
+
+In a canonical diff-in-diff, like Card and Kreuger (1994), there's a single treated group and a single post period. Letting $i\in\{T,C\}$ denote the treated and control groups respectively, that canonical diff-in-diff estimator is
+
+\[\tau^{DiD}=\mathbb{E}[Y_{T,1}(1)-Y_{T,0}(0)]-\mathbb{E}[T_{C,1}(0)-T_{C,0}(0)]\]
+
+Under the identifying assumption (referred to as the "**parallel trends**" assumption) that $\mathbb{E}[Y_{T,1}(0)-Y_{T,0}(0)]=\mathbb{E}[T_{C,1}(0)-T_{C,0}(0)]$, we get 
+
+\[\tau^{DiD}=\mathbb{E}[Y_{T,1}(1)-T_{T,1}(0)]\]
+
+This gives us our first clue that treatment effect heterogeneity matters: canonical diff-in-diff identifies the ATT; we would need to restrict treatment effect heterogeneity between the treatment and control groups to guarantee that diff-in-diff identifies the ATE. However, in this setting there's nothing wrong with the widely-used OLS estimator, as shown below.
+
+```{r Canonical DiD}
+N <- 5000
+N_T <- floor(N/2)
+N_C <- N-floor(N/2)
+D <- c(rep(1,N_T),rep(0,N_C)) # First half assigned to Treatment, second half to control
+
+Y_0 <- c(rnorm(N_T,5),rnorm(N_C)) # Treated units have period 0 outcomes ~ N(5,1), control ~ N(0,1)
+Y_1D0 <- c(rnorm(N_T,6),rnorm(N_C,1)) # Both treated and control have untreated POs for period 1 that are 1 greater in expectation
+Y_1D1 <- c(rnorm(N_T,8),rnorm(N_C,1)) # Treated units have treated POs in period 1 that are 2 greater than their untreated PO in expectation, untreated have no treatment effect
+
+ATE <- mean(Y_1D1-Y_1D0)
+ATE
+
+ATT <- mean(Y_1D1[D==1]-Y_1D0[D==1])
+ATT
+
+Y_1 <- Y_1D1*D+Y_1D0*(1-D)
+df <- tibble(D,Y_0,Y_1) %>%
+  pivot_longer(cols=c("Y_0","Y_1"),
+               names_to="t",
+               names_prefix = "Y_",
+               values_to="Y") %>%
+  mutate(t=as.numeric(t))
+
+OLS <- lm(Y~D*t,
+          data=df)
+summary(OLS)
+
+```
+
+Where things start to go wrong is when we have heterogeneous treatment effects *and* groups of units being treated at different times. The classic estimating equation in this setting estimated via OLS gives us the **two-way fixed effects** (TWFE) diff-in-diff estimator
+
+\[Y_{i,t}=\alpha_i+\delta_t+\beta^{TWFE}D_{i,t}+\varepsilon_{i,t}\]
+
+There are two main issues with this estimator. The first is similar to issues we've seen with OLS (in section) already: OLS puts relatively more weight on observations with a lot of variance in the treatment. In this setting, groups treated near the middle of the time horizon are excessively weighted, meaning their treatment effects will be relatively overrepresented in the estimated treatment effect.
+
+```{r DiD overweighting}
+N <- 3000
+Ts <- 100
+
+N1 <- floor(N/3)
+N2 <- floor(N/3)
+N3 <- N-2*floor(N/3)
+
+Y0G1 <- as.vector(sapply(c(1:Ts),function(x) rnorm(N1,x))) # Group 1 has untreated potential outcomes that go up by 1 in expectation every period
+Y0G2 <- as.vector(sapply(c(1:Ts), function(x) rnorm(N2,x+5))) # Same for Group 2, but they start at 5 rather than 1
+Y0G3 <- as.vector(sapply(c(1:Ts), function(x) rnorm(N3,x+10))) # And group 3 starts at 10
+
+Y1G1 <- as.vector(sapply(c(1:Ts),function(x) rnorm(N1,x))) # Group 1 has no expected treatment effect
+Y1G2 <- as.vector(sapply(c(1:Ts), function(x) rnorm(N2,x+15))) # Group 2 has an expected treatment effect of 10
+Y1G3 <- as.vector(sapply(c(1:Ts), function(x) rnorm(N3,x+11))) # And group 3 has an expected treatment effect of 1
+
+ATE <- mean(c(Y1G1,Y1G2,Y1G3)-c(Y0G1,Y1G2,Y1G3))
+ATE
+
+DG1 <- rep(0,N1*Ts) # Group 1 is never treated
+DG2 <- c(rep(0,N2*floor(Ts/2)),rep(1,N2*(Ts-floor(Ts/2)))) #Group 2 is treated half the time
+DG3 <- c(rep(0,N3*(Ts-1)),rep(1,N3)) # Group 3 is treated in the 
+
+ATT <- mean(c(mean(Y1G2[DG2==1]-Y0G2[DG2==1]),mean(Y1G3[DG3==1]-Y0G3[DG3==1])))
+ATT
+
+df <- tibble("D"=c(DG1,DG2,DG3),
+             "Y0"=c(Y0G1,Y0G2,Y0G3),
+             "Y1"=c(Y1G1,Y1G2,Y1G3),
+             "G"=c(rep(1,N1*Ts),rep(2,N2*Ts),rep(3,N3*Ts)),
+             "t"=c(rep(c(1:Ts),each = N1),rep(c(1:Ts),each = N2),rep(c(1:Ts),each = N3))) %>%
+  mutate(Y=D*Y1+(1-D)*Y0)
+
+Gmeans <- df %>%
+  group_by(G,t) %>%
+  summarise(Y=mean(Y))
+
+ggplot(Gmeans)+
+  geom_line(aes(x=t,y=Y,group=G,color=as.factor(G)))
+
+TWFE <- feols(Y~D|
+                G+t,
+              data=df)
+summary(TWFE)
+```
+
+In this case OLS severely overestimates the ATT. Loosely speaking, OLS is doing a good job of estimating the period-specific ATTs, but it gives all of them equal weight, whereas the only one that gives us any idea of how group 3 contributes to the ATT is the one from the last period.
+
+The second issue is referred to as the "negative weighting problem." At a high level, this issue arises because OLS doesn't differentiate between "good" comparisons, ones where we compare a group that's becoming treated to a group that's remaining untreated, and "bad" comparisons, one where we compare a group that's becoming treated to a group that's remaining *treated*. Consider a setting similar to a canonical diff-in-diff, but instead of having a group that never receives treatment, we have a group that is always treated. In a way, this group is also a control since its treatment status never changes. And indeed, as long as treatment effects don't change within the control group over time we can still do diff-in-diff without issue in this setting
+
+\[
+\tau^{DiD} = \mathbb{E}[Y_{T,1}(1)-Y_{T,0}(0)]-\mathbb{E}[T_{C,1}(1)-T_{C,0}(1)] = \mathbb{E}[Y_{T,1}(1)-Y_{T,1}(0)]-\mathbb{E}[(Y_{C,1}(1)-Y_{C,1}(0))-(Y_{C,0}(1)-Y_{C,0}(0))]
+\]
+
+The final expectation in the expression above shows that if treatment effects don't evolve over time $\mathbb{E}[(Y_{C,1}(1)-Y_{C,1}(0))-(Y_{C,0}(1)-Y_{C,0}(0))]=0$ we recover the ATT. However, we haven't made any assumptions about the evolution of treated potential outcomes, and in fact we often are explicitly interested in their evolution over time. As such, without an alternative restriction on the evolution of potential outcomes (one that restricts treatment effect heterogeneity), we don't even necessarily identify the ATT. This is referred to as the "negative weighting problem" because, as Andrew Goodman-Bacon showed in his seminal 2021 *Journal of Econometrics* article, $\hat{\beta}^{TWFE}$ can be written as a weighted average of all valid canonical diff-in-diff estimates in the data. For "bad" comparisons, like the one we just analyzed, the weight assigned is negative^[The estimates for these "bad" comparisons are also the negative of what we derived. The issue is more that the parallel trends assumption doesn't restrict evolution of *treated* potential outcomes over time.].
+
+# Dealing with Heterogeneity in Diff-in-Diff
+
+So the TWFE estimator is not good, as we've seen. Ideally, an alternative would deal with both issues: the reweighting of group-specific ATTs by treatment timing, and "bad" comparisons. There are many proposed solutions, my favorite was developed by Borusyak, Jaravel, and Spiess (2021).The way it derives point estimates is incredibly intuitive and accords very well with how we think diff-in-diff should work. In particular, it simply predicts untreated potential outcomes using estimates of unit and time period treatment effects, then takes a weighted average of differences between observed outcomes and predicted untreated outcomes.
+
+```{r BJS}
+bjs_Y0 <- feols(Y~1|G+t,
+                data=df[df$D==0,])
+df$Y0_hat <- predict(bjs_Y0,newdata=df)
+
+bjs_est <- df %>%
+  mutate(ATT=Y-Y0_hat) %>%
+  filter(D==1) %>%
+  group_by(G) %>%
+  summarize(ATT=mean(ATT))
+mean(bjs_est$ATT)
+```
+The BJS estimator does much better than our TWFE estimator here because it separately calculates the ATT by group and then averages them^[Actually, BJS lets you average them up however you want!]. However, it should be clear that it also avoids bad comparisons because we only use untreated observations to predict untreated outcomes.
