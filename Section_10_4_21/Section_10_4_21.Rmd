@@ -132,9 +132,9 @@ print(paste("P-score binning ATE estimate:",ate_est))
 ```
 While we're still overestimating the ATE, there's a little improvement over the OLS-based method above. It's also quite easy to understand why this method works. We know that under our assumptions
 
-\[\mathbb{E}[Y_i(1)]\approx\mathbb{E}[Y_j(0)]\; if\; X_i\approx X_j\]
+\[\mathbb{E}[Y_i(0)]\approx\mathbb{E}[Y_j(0)]\; if\; X_i\approx X_j\]
 
-since uncounfoundedness implies $\mathbb{E}[Y_i(0)|X=x]=\mathbb{E}[Y_i(1)|X=x]$. Thus, as long as untreated potential outcomes don't change too quickly over the width of a bin and we have enough observations in each bin to average out the error terms, we should get good estimates of $\mathbb{E}[Y_i(0)|X\approx x]$ and $\mathbb{E}[Y_i(1)|X\approx x]$ in each bin.
+since uncounfoundedness implies $\mathbb{E}[Y_i(0)|D_i=1,X_i=x]=\mathbb{E}[Y_i(0)|D_i=0,X_i=x]$. Thus, as long as untreated potential outcomes don't change too quickly over the width of a bin and we have enough observations in each bin to average out the error terms, we should get good estimates of $\mathbb{E}[Y_i(0)|X\approx x]$ and $\mathbb{E}[Y_i(1)|X\approx x]$ in each bin.
 
 As an aside, in the particular example above, we can exactly derive how well this approximation does (in expectation) in a given bin $b_k=[b_k^-,b_k^+]$:
 

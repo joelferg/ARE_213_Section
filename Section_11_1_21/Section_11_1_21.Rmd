@@ -3,8 +3,8 @@ title: "Recent Advances in Diff-in-Diff"
 author: "Joel Ferguson"
 date: "11/01/2021"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -16,15 +16,15 @@ set.seed(11121)
 
 # Treatment effect heterogeneity in Diff-in-Diff
 
-Over the past few years there has been a massive improvement in our understanding of Diff-in-Diff and the tools available for estimating treatment effects using a Diff-in-Diff research design. Like the expansion of our understanding of IV, regarding its interpretation as estimating a Local Average Treatment Effect (we'll cover this in a few weeks), these advances came from thinking about treatment effect heterogeneity and how are we summarizing it with a single estimate. To see why treatment effect heterogeneity matters, it's worth revisiting the most basic form of diff-in-diff estimation.
+Over the past few years there has been a massive improvement in our understanding of Diff-in-Diff and the tools available for estimating treatment effects using a Diff-in-Diff research design. Like the expansion of our understanding of IV, regarding its interpretation as estimating a Local Average Treatment Effect (we'll cover this in a few weeks), these advances came from thinking about treatment effect heterogeneity and how we are summarizing it with a single estimate. To see why treatment effect heterogeneity matters, it's worth revisiting the most basic form of diff-in-diff estimation.
 
 In a canonical diff-in-diff, like Card and Kreuger (1994), there's a single treated group and a single post period. Letting $i\in\{T,C\}$ denote the treated and control groups respectively, that canonical diff-in-diff estimator is
 
-\[\tau^{DiD}=\mathbb{E}[Y_{T,1}(1)-Y_{T,0}(0)]-\mathbb{E}[T_{C,1}(0)-T_{C,0}(0)]\]
+\[\tau^{DiD}=\mathbb{E}[Y_{T,1}(1)-Y_{T,0}(0)]-\mathbb{E}[Y_{C,1}(0)-Y_{C,0}(0)]\]
 
-Under the identifying assumption (referred to as the "**parallel trends**" assumption) that $\mathbb{E}[Y_{T,1}(0)-Y_{T,0}(0)]=\mathbb{E}[T_{C,1}(0)-T_{C,0}(0)]$, we get 
+Under the identifying assumption (referred to as the "**parallel trends**" assumption) that $\mathbb{E}[Y_{T,1}(0)-Y_{T,0}(0)]=\mathbb{E}[Y_{C,1}(0)-Y_{C,0}(0)]$, we get 
 
-\[\tau^{DiD}=\mathbb{E}[Y_{T,1}(1)-T_{T,1}(0)]\]
+\[\tau^{DiD}=\mathbb{E}[Y_{T,1}(1)-Y_{T,1}(0)]\]
 
 This gives us our first clue that treatment effect heterogeneity matters: canonical diff-in-diff identifies the ATT; we would need to restrict treatment effect heterogeneity between the treatment and control groups to guarantee that diff-in-diff identifies the ATE. However, in this setting there's nothing wrong with the widely-used OLS estimator, as shown below.
 
@@ -115,7 +115,7 @@ In this case OLS severely overestimates the ATT. Loosely speaking, OLS is doing 
 The second issue is referred to as the "negative weighting problem." At a high level, this issue arises because OLS doesn't differentiate between "good" comparisons, ones where we compare a group that's becoming treated to a group that's remaining untreated, and "bad" comparisons, one where we compare a group that's becoming treated to a group that's remaining *treated*. Consider a setting similar to a canonical diff-in-diff, but instead of having a group that never receives treatment, we have a group that is always treated. In a way, this group is also a control since its treatment status never changes. And indeed, as long as treatment effects don't change within the control group over time we can still do diff-in-diff without issue in this setting
 
 \[
-\tau^{DiD} = \mathbb{E}[Y_{T,1}(1)-Y_{T,0}(0)]-\mathbb{E}[T_{C,1}(1)-T_{C,0}(1)] = \mathbb{E}[Y_{T,1}(1)-Y_{T,1}(0)]-\mathbb{E}[(Y_{C,1}(1)-Y_{C,1}(0))-(Y_{C,0}(1)-Y_{C,0}(0))]
+\tau^{DiD} = \mathbb{E}[Y_{T,1}(1)-Y_{T,0}(0)]-\mathbb{E}[Y_{C,1}(1)-Y_{C,0}(1)] = \mathbb{E}[Y_{T,1}(1)-Y_{T,1}(0)]-\mathbb{E}[(Y_{C,1}(1)-Y_{C,1}(0))-(Y_{C,0}(1)-Y_{C,0}(0))]
 \]
 
 The final expectation in the expression above shows that if treatment effects don't evolve over time $\mathbb{E}[(Y_{C,1}(1)-Y_{C,1}(0))-(Y_{C,0}(1)-Y_{C,0}(0))]=0$ we recover the ATT. However, we haven't made any assumptions about the evolution of treated potential outcomes, and in fact we often are explicitly interested in their evolution over time. As such, without an alternative restriction on the evolution of potential outcomes (one that restricts treatment effect heterogeneity), we don't even necessarily identify the ATT. This is referred to as the "negative weighting problem" because, as Andrew Goodman-Bacon showed in his seminal 2021 *Journal of Econometrics* article, $\hat{\beta}^{TWFE}$ can be written as a weighted average of all valid canonical diff-in-diff estimates in the data. For "bad" comparisons, like the one we just analyzed, the weight assigned is negative^[The estimates for these "bad" comparisons are also the negative of what we derived. The issue is more that the parallel trends assumption doesn't restrict evolution of *treated* potential outcomes over time.].
